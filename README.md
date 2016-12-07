@@ -1,0 +1,1 @@
+## Annotated code for selected exercise boxes from *Quantitative Methods in Fisheries* (Haddon, 2011) completed for E Franklin's Marine Bio 611 Course of the same title, taken Fall 2014 at U of Hawaii, Manoa.
