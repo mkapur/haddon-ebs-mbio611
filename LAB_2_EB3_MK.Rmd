@@ -1,0 +1,191 @@
+---
+title: "Haddon Example Box 3 - Parameter Estimation"
+author: "Maia Kapur"
+date: "Monday, November 23, 2015"
+output: html_document
+---
+## MBIO 611 LAB 2. 
+### HADDON EXAMPLE BOX 3.1
+```{r}
+require(nlmrt)
+require(bbmle)
+SizeEggs <- read.csv("G:/MBIO 611/Lab Assignments/LAB_2_EB3/sizeEggs.csv")
+size <- c(20.71,30.35,37.04,39.5,55.6,67.9,69.46,84.12,94.31,108.47,125.54,132.7,137.31,141.34,178.6,224.31,229.89)
+egg <- c(89.35,82.399,166.97,98.324,135.427,240.713,181.713,193.161,310.425,213.247,411.056,366.567,298.439,529.351,440.394,683.008,545.681)
+#Establish parameters (given)
+SSQi <- 21.50984 #SSQ Intercept
+SSQg <- 2.599989 #SSQ Gradient
+SARi <- 17.080
+SARg <- 2.370186
+#Make placeholders
+PredSSQ <- rep(0, 17)
+PredSAR <- rep(0, 17)
+
+#Create a linear function
+PredSSQ <- sapply(SizeEggs$Size, function(x) {SSQi + SSQg * x})
+PredSAR <- sapply(SizeEggs$Size, function(x) {SARi + SARg * x})
+Pred <- cbind(PredSSQ, PredSAR)
+matplot(Pred)
+
+#Have R Create a Linear Model & Calculate SSQ
+lm <- lm(SizeEggs$Eggs ~ SizeEggs$Size)
+eggsqres = resid(lm)^2
+sum(eggsqres)
+summary(lm)
+
+#evaluate actual SSQ and SAR values
+SSQ <- (SizeEggs$Eggs - PredSSQ)^2
+SAR <- abs(SizeEggs$Eggs - PredSAR)
+SumSSQ <- sum(SSQ)
+SumSAR <- sum(SAR)
+Actual <- cbind(SSQ,SAR)
+matplot(Actual)
+
+#Combine All in a Matrix
+HB31 <- cbind(SizeEggs, Pred, Actual)
+
+#Plot it with a legend 
+plot(SizeEggs$Size, SizeEggs$Eggs, type = 'o', lty = 0, pch = 16, ylab = 'Eggs', xlab = 'Size')
+lines(SizeEggs$Size, PredSSQ, type = 'l', lty = 1, pch = 16, col = 'red')
+lines(SizeEggs$Size, PredSAR, type = 'l', lty = 1, pch = 16, col = 'blue')
+legend('topleft', legend = c('Observed Values', 'PredSSQ', 'PredSAR'), lty = c(0,1,1), pch = 16, col = c('black', 'red', 'blue'))
+
+WidthEggs <- read.csv("G:/MBIO 611/Lab Assignments/LAB_2_EB3/widthEggs.csv")
+
+#define variables
+b <- 0.034734
+lna <- 2.769649
+
+#construct funtion
+predicted <- sapply(WidthEggs$Width, function(x) {lna + b * x})
+ResidSq <- (log(WidthEggs$Eggs) - predicted)^2
+ExpPred <- exp(predicted)
+plot(WidthEggs$Width, WidthEggs$Eggs, type = 'o', lty = 0, col = 'black', ylab = '', xlab = 'width')
+lines(WidthEggs$Width, ExpPred, type = 'o', lty = 1, pch = 16, col = 'red')
+text(60, 600, "Eggs = 15.953e^0.0347Width")
+```
+### HADDON EXAMPLE BOX 3.5
+```{r}
+#install.packages("MASS")
+#this does NOT install for R 3.1.1, and therefore cannot fitdistr)
+rm(list=ls(all=TRUE))
+x = c(2.5, 3.5, 4, 6, 6.5, 7.5)
+mean = 4.5
+sd= 1
+#test hypothesis about the parameters with a mean of 4.5
+normLL = function(mean, sd) {
+  prod(dnorm(x, mean, sd))
+} #dnorm creates normal pdf, so you are multiplying across them. remember king kong pi
+normLL(mean, sd) # this function gives likelyhood of parameters 
+#GIVEN observations upon a normal dist
+
+
+mean = c(4.5, 5, 5.25) #compare multiple hypotheses
+sd = c(1, 1, 1)
+
+LL = rep(0,3) #likelihood placeholder
+print(LL)
+
+#loops through all three provided parameters to get likelhiood values for each.
+#Results show that i[2] (mean of 5) is most likely
+for(i in 1:length(mean)) {
+  LL[i] = normLL(mean[i], sd[i])
+  print(LL)
+}
+LL # this indicates that mean of 5 and sd 1.7795 are most likely parameter set
+normLL(5, 1.7795)
+
+library(MASS)
+fitdistr(x, dnorm, list(mean = 4.5, sd = 1), lower = 0.0001) #creates maximum likelihood fitting of univariate parameters
+```
+### HADDON EXAMPLE BOX 3.6
+```{r}
+#define variables and functions
+Linf = 55
+K = 0.350
+t.0 = 0
+sd = 1.000
+yrs= c(1,2,seq(3.3,11.3,1))
+len.obs = c(15.4, 26.93, 42.23, 44.59, 47.63, 49.67, 50.87, 52.3, 54.77, 56.43, 55.88)
+n = length(len.obs)
+len.exp = Linf*(1-exp(-K*(yrs-t.0)))
+resid = (len.obs - len.exp)^2
+ssq = sum(resid)
+LL = log(dnorm(len.obs, len.exp, sd))
+negLL = -1*sum(LL)
+
+sd.ml = sqrt(ssq/n)
+negLL2 = (n/2)*(log(2*pi)+2*log(sd.ml)+1)
+
+sv = list(Linf = 40, K = 0.4, t.0 = 0)
+
+#generate model based on Von B
+vbgf = len.obs ~ Linf*(-exp(-K*(yrs-t.0)))
+
+## fit nonlinear least squares to observations as data frame
+# fit.vbgf = nls(vbgf, data=as.data.frame(cbind(yrs, len.obs)), start = sv)
+# summary(fit.vgbf)
+
+```
+### HADDON EXAMPLE BOX 3.8
+```{r}
+#define variables
+rm(list=ls(all=TRUE))
+a = 27
+b = 4
+SD = 1
+n=14
+S <- c(2.4, 3.2, 3.9, 5.7, 6, 7.4, 8.2, 10, 10.1, 10.4, 11.3, 12.8, 18, 24)
+R <- c(11.6, 7.1, 14.3, 19.1, 12.4, 19.7, 37.5, 18.4, 22.1, 26.9, 19.2, 21, 9.9, 26.8)
+R.exp = (a*S)/(b+S)
+resid = (log(R) - log(R.exp)^2)
+ssq = sum(resid)
+sd.ml = sqrt(ssq/n)
+
+
+sv = list(a = 25, b = 4)
+
+#define srr
+srr <- log(R) ~ log((a*S)/(b+S))
+
+#fit the values
+fit.srr <- nls(srr, data=as.data.frame(cbind(S, R)), start=sv)
+summary(fit.srr)
+
+#exponentiate them
+exp(fitted(fit.srr))
+
+#plot it
+plot(exp(fitted(fit.srr)))
+plot(S,R, xlab = 'stock', ylab = 'recruits')
+lines(S,exp(fitted(fit.srr)))
+
+```
+### HADDON EXAMPLE BOX 3.10
+```{r}
+#create placeholders for each population size
+popsize <- seq(550,1800,1)
+
+#Define observations for first population
+m1 = 32 #tags found
+p1 = 151 #original number tagged
+n1 = 222 #sample size
+
+#Define observations for second population
+m2 = 31
+n2 = 181
+p2 = 151
+
+#run binomial distribution for each population
+pop1 <- dbinom(m1+1, n1+1, p1/popsize, log = FALSE)
+pop2 <- dbinom(m2+1, n2+1, p2/popsize, log = FALSE)
+rellike <- cbind(popsize, pop1, pop2) #this is a matrix
+
+#Plot it 
+matplot(rellike[,2:3], type = 'l', col = 'black', xlab = 'PopSize', ylab = 'Relative Likelihood')
+```
+### HADDON EXAMPLE BOX 3.13
+```{r}
+matplot(0:50, t(matrix(sapply(0:50, dgamma, scale = 2, shape = c(3,13)), nrow = 2)), type = 'l', lwd = 2, lty = 1, col = 'black', ylim = c(0,0.14), ylab = 'Probability Density', xlab = 'x - variate')
+```
+

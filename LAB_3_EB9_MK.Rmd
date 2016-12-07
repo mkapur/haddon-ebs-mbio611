@@ -1,0 +1,189 @@
+---
+title: "Haddon Example Box 9 - VonB and Growth Estimation via NLS"
+author: "Maia Kapur"
+date: "August 31, 2016"
+output: html_document
+---
+## MBIO 611 LAB 2. 
+### HADDON EXAMPLE BOX 9.1
+```{r, warning = FALSE, message = FALSE}
+require(minpack.lm)
+# Define variables
+age = c(c(1,2), seq(3.3, 13.3, 1))
+lobs = c(15.4, 28.03, 41.18, 46.2, 48.23, 50.26, 51.82, 54.27, 56.98, 58.93, 59.00, 60.91, 61.83)
+wobs = c(0.2, 0.35, 0.72, 1.70, 2.40, 3.12, 3.82, 3.93, 4.22, 3.88, 4.42, 4.13, 4.42)
+
+# Define Parameters
+l.inf = 61.2
+K = 0.3
+t0 = -0.06
+w.inf = 4.85
+b = 3.078
+
+#define growth function 
+l.exp = sapply(age, function(t) l.inf * (1-exp(-K*(t - t0))))
+w.exp = sapply(age, function(t) w.inf * (1-exp(-K*(t - t0)))^b)
+
+## Applynon linear least squares
+fit.vonB.length = nls(lobs ~ l.inf * (1-exp(-K*(age - t0))), 
+                      start=list(l.inf = l.inf, K = K, t0 = t0))
+summary(fit.vonB.length)
+
+fit.vonB.weight = nlsLM(wobs ~ w.inf*(1-exp(-K*(age - t0)))^b, start = list(w.inf = w.inf, K = K, t0 = t0, b = b))
+summary(fit.vonB.weight)
+
+K = summary(fit.vonB.length)$parameters["K","Estimate"]
+linf = summary(fit.vonB.length)$parameters["l.inf","Estimate"]
+t0 = summary(fit.vonB.length)$parameters["t0","Estimate"]
+b = summary(fit.vonB.weight)$parameters["b", 'Estimate']
+
+## Plot it with a curve
+plot(age, wobs, ylab = 'Weight (kg)', xlab = 'Age (years)', main = 'Weight and Age')
+lines (age, w.exp)
+
+# Length and age
+plot(age, lobs, ylab = 'Length (cm)', main = 'Von Bertalanffy', xlab = 'Age (years)', pch = 5)
+lines(age, l.exp)
+```
+### HADDON EXAMPLE BOX 9.2
+```{r, eval = FALSE}
+## libary(bbmle) # doesn't exist for this r
+#create vectors for time and observed variables
+obs<-c(3, 9, 15, 12, 19, 24, 24, 21, 21, 24, 30, 36, 38, 48, 45, 49, 49, 52, 59, 61, 65, 67, 68, 64, 65, 67, 68, 71, 75, 73)
+t<-c(1, 4, 8, 10, 14, 24, 28, 30, 38, 48, 52, 60, 64, 70, 72, 82, 90, 94, 104, 112, 114, 122, 132, 134, 138, 146, 152, 158, 172, 176)
+n<-length(obs)
+
+#define von b without seasonality
+vonb_noseason <- function(Linf, t0, k){
+  exp_length <-  Linf*(1-exp(-k*(t - t0)))
+  sigma <- sqrt(sum((log(exp_length)-log(obs))^2)/n)
+  nll <- (n/2)*((log(2*pi)+2*log(sigma)+1))
+  return(nll)
+}
+
+#define MLE for von b, ask it to minimize the log likelihood
+mle <- mle2(minuslogl = vonb_noseason, start = list(Linf = 93.77, k = 0.1, t0 = .9181))
+mle
+
+#extract fitted coefficients
+lengthinf = mle@coef[1]
+time = mle@coef[2]
+b = mle@coef[3]
+
+#define fitted equation with new parameters
+mlefit = lengthinf*(1-exp(-b*(t - time)))
+mlefit
+
+plot(t, mlefit, xlab='Time (years)', xlim=c(0, 200), ylab='Length at Age', ylim=c(0, 100), pch=18, las = 1, type = "l")
+#points(age, fitted(mod.eb3.6), type = 'l', lwd = 2)
+#legend('bottomright', c('observed', 'model'), pch = c(18, NA), lwd = 2, lty = c(0,1))
+
+
+##same thing again but change the exp_length eqn to account for seasonality
+
+vonb_season <- function(Linf, t0, k, c, s){
+  exp_length <- Linf * (1 - exp(-(cycle_1*sin(2*pi*(time - s_1)/52) + k*(time - t0))))
+  sigma <- sqrt(sum((log(exp_length)-log(obs))^2)/n)
+  nll <- (n/2)*((log(2*pi)+2*log(sigma)+1))
+  return(nll)
+}
+
+mleseas <- mle2(minuslogl = vonb_season, start = list(Linf = 93.77, k = 0.1, t0 = .9181, c=0.07, s=5))
+mleseas
+
+lengthinf = mleseas@coef[1]
+time = mleseas@coef[2]
+b = mleseas@coef[3]
+c = mleasas@coef[4]
+s = mleaseas@coef[5]
+
+#define fitted equation with new parameters
+mlefitseas = lengthinf*(1-exp(-(c*sin*(2*pi(t-s))/52)))+b(t0-time)
+mlefitseas
+
+plot(t, mlefitseas, xlab='Time (years)', xlim=c(0, 200), ylab='Length at Age', ylim=c(0, 100), pch=18, las = 1, type = "l")
+```
+### HADDON EXAMPLE BOX 9.3
+```{r}
+## Fit a growth curve to tagging data using Fabens method
+
+#define variables and time steps
+l.inf = 100.39
+K = 0.31
+t.0 = 0
+
+t.delta = c(rep(170,10), rep(385,10), rep(690,10))
+l.t = c(21, 27, 28, 35, 40, 49, 56, 72, 74, 75, 20, 36, 46, 48, 58, 60, 70, 72, 81, 86, 22, 23, 25, 26, 28, 38, 51, 51, 74, 81)
+l.delta = c(15.1, 6.4, 11.5, 10.3, 10.8, 9.4, 3.6, 2.1, 5.2, 2.3, 27.2, 14.8, 18.3, 15.2, 12.2, 10.8, 10.2, 7.1, 4.1, 6.2, 28.6, 37.3, 37.2, 26.1, 27.9, 31, 24.7, 19.9, 9.7, 9.3)
+t.delta.yrs = t.delta/365
+e.l.delta =  (l.inf - l.t) * (1 - exp((-K*t.delta.yrs)))
+
+# modeling change in length by least squares
+ls.l.delta = nlsLM(l.delta ~ (l.inf -l.t) * (1-exp((-K*t.delta.yrs))), 
+                   start = list(K = K, l.inf = l.inf))
+summary(ls.l.delta)
+ssq = sum(resid(ls.l.delta)^2)
+
+## Plot It
+
+#make subsets of data for initial and change values
+sub1 = cbind(l.t[t.delta == 170], l.delta[t.delta == 170])
+sub2 = cbind(l.t[t.delta == 385], l.delta[t.delta == 385])
+sub3 = cbind(l.t[t.delta == 690], l.delta[t.delta == 690])
+
+#generate linear model for each subset to compare change to initial length
+lm.sub1 = lm(sub1[,2] ~ sub1[,1])
+lm.sub2 = lm(sub2[,2] ~ sub2[,1])
+lm.sub3 = lm(sub3[,2] ~ sub3[,1])
+
+plot(sub1[,1], sub1[,2], xlab = 'Initial Length', ylab = 'Change in Length', xlim = c(10, 90), ylim = c(0, 40), pch = 0)
+points(sub2[,1], sub2[,2], pch = 1)
+points(sub3[,1], sub3[,2], pch = 2)
+lines(x = c(min(sub1[,1]), max(sub1[,1])), y = lm.sub1$coef[1]+lm.sub1$coef[2]*c(min(sub1[,1]), max(sub1[,1])))
+lines(x = c(min(sub2[,1]), max(sub2[,1])), y = lm.sub2$coef[1]+lm.sub2$coef[2]*c(min(sub2[,1]), max(sub2[,1])))
+lines(x = c(min(sub3[,1]), max(sub3[,1])), y = lm.sub3$coef[1]+lm.sub3$coef[2]*c(min(sub3[,1]), max(sub3[,1])))
+legend('topright', cex = 1, legend = c('170 Days', '385 days', '690 days'),
+       pch = c(0, 1, 2), col = c("Black", "black", "black"))
+```
+### HADDON EXAMPLE BOX 9.5. Currently not working.
+```{r, eval = FALSE}
+## Comparison of Von B Growth Rates by Sex - Kimura's Likelihood Ratio 
+
+## Define data
+t = c(1, 2, 3.3, 4.3, 5.3, 6.3, 7.3, 8.3, 9.3, 10.3, 11.3, 12.3, 13.3, 1, 2, 3.3, 4.3, 5.3, 6.3, 7.3, 8.3, 9.3, 10.3, 11.3)
+l = c(15.4, 28.03, 41.18, 46.2, 48.23, 50.26, 51.82, 54.27, 56.98, 58.93, 59, 60.91, 61.83, 15.4, 26.93, 42.23, 44.59, 47.63, 49.67, 50.87, 52.3, 54.77, 56.43, 55.88)
+sex = c(rep('F',14), rep('M',10))
+df = as.data.frame(cbind(as.numeric(t),as.numeric(l),sex))
+
+## Starting parameter values
+l_f.inf = 61.23
+k = 0.296
+t0 = -0.057
+l_m.inf = 61.23
+k_m = 0.296
+t.0_m = -0.057
+
+l.obs_f = as.numeric(df$V2[sex != 'M'])
+l.obs_m = as.numeric(df$V2[sex == 'M'])
+t_f = as.numeric(df$V1[sex == 'F'])
+t_m = as.numeric(df$V1[sex == 'M'])
+
+## Use nonlinear least squares to compare
+f.vonB.length = nls(l.obs_f ~ l_f.inf * (1-exp(-k*(t_f - t0))), 
+                    start=list(l_f.inf = l_f.inf, k = k, t0 = t0))
+summary(f.vonB.length)
+
+m.vonB.length = nls(l.obs_m ~ l_m.inf * (1-exp(-k_m*(t_m - t.0_m))), 
+                    start=list(l_m.inf = l_m.inf, k_m = k_m, t.0_m = t.0_m))
+summary(m.vonB.length)
+
+
+plot(t_f, l.obs_f, xlab = 'Age (yrs)', ylab = 'Total Length cm')
+lines(t_f[-length(t_f)], unique(predict(f.vonB.length)))
+lines(t_m, unique(predict(m.vonB.length)))
+points(t_m, l.obs_m, pch = 17 )
+legend('bottomright', cex = 0.5, legend = c('Females', 'Males'),
+       pch = c(1, 17),  col = c("Black", "black", "black"))
+```
+
+

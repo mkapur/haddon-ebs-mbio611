@@ -1,0 +1,202 @@
+---
+title: "Haddon Example Box 11 - Growth Models"
+author: "Maia Kapur"
+date: "August 31, 2016"
+output: html_document
+---
+## MBIO 611 Lab 5
+### HADDON EXAMPLE BOX 11.4 - missing bblme
+```{r, eval = FALSE}
+## Import 'bbmle' package for MLE
+library(bbmle)
+## Import Data
+
+year = 1970:1998
+catch = c(1138,1183,1380,1672,666,973,1118,2900,3599,4218,5124,5559,4891,5751,4525,3592,2682,3617,3458,3173,3550,3987,3084,2515,3162,4125,2311,2694,3250)
+CPUE =c(0.1956,0.1953,0.1870,0.2271,0.1937,0.1619,0.1679,0.2484,0.1920,0.2371,0.1675,0.1743,0.1484,0.1664,0.1395,0.1355,0.1006,0.1609,0.1317,0.1174,0.1391,0.1922,0.1415,0.1570,0.1701,0.2450,0.1389,0.1751,0.1805)
+n = length(year)
+
+## Set Objective Function
+surp.pro = Vectorize(function(r, K, B, p){ #parameters for the Process Model (Biomass Dynamic Model)
+  
+  #Rescale parameters
+  K = K * 100
+  B = B * 100
+  r = r/1000
+  p = p * 0.00000000001
+  
+  #Populate the Biomass Vector 
+  expect_B = vector() 
+  expect_B[1] = B #initial biomass
+  for(i in 2:n){ 
+    expect_B[i] = max(expect_B[i-1] + (r/p)*expect_B[i-1]*(1-(expect_B[i-1]/K)^p) - catch[i-1], 100)
+  } #NB: max function makes sure the biomass is not negative
+  
+  #Calculation of q
+  expect_q = CPUE/expect_B #maybe should be called obs_q?
+  
+  #Constant q
+  #q_const = exp(mean(log(expect_q)))
+  
+  #Additive Increment to Catchability
+  #q_lm_coefs = lm(expect_B ~ c(0:(n-1)))$coef
+  #q_add = q_lm_coefs[1] + q_lm_coefs[2]*(0:(n-1))
+  
+  #Constant Proportional Increase
+  q_lm_coefs = lm(log(expect_q) ~ c(0:(n-1)))$coef
+  q_inc = exp(q_lm_coefs[1])*exp(q_lm_coefs[2])^(0:(n-1))
+  
+  #Calculate Expected Values of CPUE
+  expect_CPUE = q_inc * expect_B 
+  
+  #Calculate NLL
+  sigma = sqrt(sum((log(expect_CPUE) - log(CPUE))^2)/n) #lognormal error structure
+  nLL = (n/2) * (1 + 2*log(sigma) + log(2*pi))
+  return(nLL)
+}
+)
+
+## Parameter Optimization
+
+spm = mle2(minuslogl = surp.pro, start = list(r = 300, K = 300, B = 150, p = 100), method = 'L-BFGS-B', lower = c(r = 0, K = 0, B = 0, p = 0))
+#surp.pro is the objective function that mle2() will minimize
+#'lower' argument sets the lower bounds of the parameters
+
+## Calculate Fited Values
+
+#Extract and rescale MLE parameters optimized by mle2()
+r = spm@coef[1] / 1000
+K = spm@coef[2] * 100
+B = spm@coef[3] * 100
+p = spm@coef[4] * 0.00000000001
+
+#Calculate biomass based on the optimized parameters of r, p, K, and B
+expect_B = vector() 
+expect_B[1] = B #initial biomass
+for(i in 2:n){
+  expect_B[i] = max(expect_B[i-1] + (r/p)*expect_B[i-1]*(1-(expect_B[i-1]/K)^p) - catch[i-1], 100)
+} #NB: max function makes sure the biomass is not negative
+
+#Calculate q (Constant Proportional Increase)
+expect_q = CPUE/expect_B
+q_lm_coefs = lm(log(expect_q) ~ c(1:n))$coef
+q_inc = exp(q_lm_coefs[1])*exp(q_lm_coefs[2])^(1:n)
+
+#Calculate expected CPUE
+expect_CPUE = q_inc * expect_B 
+
+#########################
+## Plot CPUE over Time
+#########################
+
+par(mfrow = c(1,1))
+plot(year, CPUE, xlab = 'Year', ylim = c(0,0.3), ylab = 'Catch Rate', type = 'b', pch = 16, lty = 2,las = 1)
+lines(year, expect_CPUE, lwd = 2)
+```
+### HADDON EXAMPLE BOX 11.5
+```{r, eval = F}
+
+## Create ranges r and K values 
+## Make a df ('like') with all the combo's of r and K
+
+
+seq_r = seq(from = 175, to = 425, length = 53)
+seq_K = seq(from = 22000, to = 50800, length = 33)
+like = expand.grid(r = seq_r, K = seq_K)
+
+
+## Calculate the LLs for the combos of r and K while
+## setting B and p constant 
+
+
+like$LL = surp.pro(r = like$r, K = like$K/100, B = spm@coef[3], p = spm@coef[4]) * -1
+
+######################
+## Plot LL contours
+######################
+
+LL_mat = round(matrix(like$LL, ncol = 33, nrow = 53, byrow = FALSE, dimnames = list(paste(round(seq_r, 2)), paste(seq_K))), 1)
+contour(x = seq_r/1000, y = seq_K, z = LL_mat, levels = seq(from = 14,to = 18,by = .25), ylab = 'K', xlab = 'r')
+
+```
+### HADDON EXAMPLE BOX  11.6
+```{r, eval = FALSE}
+##################################
+## Calculate Lognormal Residuals
+##################################
+residual = CPUE/expect_CPUE
+
+###############################################
+## Create vectors for the bootstrap estimates
+###############################################
+boot_r = boot_K = boot_qinc = boot_p = boot_B = boot_BMSY = boot_MSY = vector()
+boot_B_mat = matrix(nrow = 1000, ncol = length(year), dimnames = list(NULL,paste(year)))
+
+######################################
+## Conduct the Bootstrap
+######################################
+ptm = proc.time()
+
+for(i in 1:1000){
+  tryCatch({
+    
+    ################################
+    ## Bootstrap CPUE values
+    ################################
+    
+    CPUE = expect_CPUE*sample(residual, replace = T) 
+    
+    ################################
+    ## Reoptimize Parameters
+    ################################
+    
+    spm_boot = mle2(surp.pro, start = list(r = 300, K = 300, B = 150, p = 100), 
+                    method = 'L-BFGS-B', lower = c(r = 0, K = 0, B = 0, p = 0))
+    
+    #################################
+    ## Extract bootstrap estimates
+    #################################
+    
+    0.001 * spm_boot@coef[1] -> boot_r[i]                 #Save r-value
+    100 * spm_boot@coef[2] -> boot_K[i]                   #Save K-value
+    0.00000000001 * spm_boot@coef[4] -> boot_p[i]         #Save p-value
+    
+    100 * spm_boot@coef[3] -> boot_B_mat[i,1]             #Save Biomass Vector
+    
+    for(j in 2:n){
+      boot_B_mat[i,j] = max(boot_B_mat[i,j-1] + (boot_r[i]/boot_p[i])*boot_B_mat[i,j-1]*(1-(boot_B_mat[i,j-1]/boot_K[i])^boot_p[i]) - catch[j-1], 100)
+    }
+    
+    expect_q = log(CPUE/boot_B_mat[i,]) 
+    boot_qinc[i] = exp(lm(expect_q ~ c(0:(n-1)))$coef[2]) #Save qinc-value
+    
+  }, error = function(e){})
+}
+
+proc.time() - ptm
+
+#################################
+## Store bootstrap results
+##################################
+
+boot_summary = data.frame(r = boot_r, K = boot_K, qinc = boot_qinc)
+
+#####################################
+## Write boot_summary and boot_B_mat
+#####################################
+
+write.csv(boot_summary, file = '~/Desktop/MKBoot.csv', row.names = F)
+write.csv(boot_B_mat, file = '~/Desktop/MKMat.csv', row.names = F)
+
+######################################
+## Plot Bootstrap Distributions
+######################################
+
+boot_11 = read.csv('~/Desktop/MKBoot.csv', header = T)
+
+par(mfrow = c(2,2), las = 1)
+hist(boot_11$r, nclass = 30, main = 'Bootstrapped Distribution for r', xlab = 'r'); points(r, 0, pch = 16, cex = 2); legend('topright', pch = 16, legend = 'Optimal Value', bty = 'n', cex = 0.75)
+hist(boot_11$K, nclass = 30, main = 'Bootstrapped Distribution for K', xlab = 'K'); points(K, 0, pch = 16, cex = 2)
+hist(boot_11$q, nclass = 30, main = 'Bootstrapped Distribution for qinc', xlab = 'qinc'); points(exp(q_lm_coefs[2]), 0, pch = 16, cex = 2)
+hist(boot_11$r * boot_11$K * .25, nclass = 100, main = 'Bootstrapped Distribution for MSY (Approximate)', xlab = 'MSY', xlim = c(2000, 5000)); points(r*K*.25, 0, pch = 16, cex = 2)
+

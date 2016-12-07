@@ -1,0 +1,170 @@
+---
+title: "Haddon Example Box 2 - Growth Functions"
+author: "Maia Kapur"
+date: "August 31, 2016"
+output: html_document
+---
+## MBIO 611 LAB 1.
+### HADDON EXAMPLE BOX 2.1
+```{r}
+## Parameters and Constants
+b <- c(0.1,0.1,0.1)
+d <- c(.04, 0.1, 0.125)
+r <- b - d
+N0 <- 500
+time <- seq(0, 8, by = 0.5)
+
+exp_series <- sapply(r, function(r){N0 *exp(r*time)}) #Density-Independent Growth Function
+exp_serieslog <- log(exp_series)
+
+## Plot them
+
+matplot(time, exp_series, lty = 1, pch = 16, type = 'b', ylab = 'N', ylim = c(0,900))
+legend('topleft', legend = c('r = -0.025', 'r = 0', 'r = 0.06'), lty = 1, pch = 16, col = c('green', 'red', 'black'))
+
+matplot(time, exp_serieslog, lty = 1, pch = 16, type = 'b', ylab = 'N', ylim = c(0,8))
+legend('topleft', legend = c('r = -0.025', 'r = 0', 'r = 0.06'), lty = 1, pch = 16, col = c('green', 'red', 'black'))
+#Adjust the Y axis max and mins to account for new scale
+```
+### HADDON EXAMPLE BOX 2.2 - 2.3
+```{r}
+## Set Place Holders
+t <- seq(0:19)
+Nt <- rep(0, length(t))
+Nt1 <- rep(0,length(t)-1)
+i <- 1
+
+## Assign Constants
+ 
+r <- 0.5 #Intrinsic Growth Rate
+K <- 1000 #Carrying Capacity
+Nt[1] <- 50 #Starting Population Size
+
+## Create density-dependent logistic growth function
+logistic <- function(N, growth_rate, Carrying_Capacity, fishing) 
+            {N + N*growth_rate*(1 -(N/Carrying_Capacity)) - fishing} # Logistic Function
+
+## Create Time Series using a while loop
+while(i <= length(Nt1))
+{
+Nt1[i] <- logistic(growth_rate = r, Carrying_Capacity = K, N = Nt[i], fishing = 0)
+Nt[i+1] <- Nt1[i]
+i <- i + 1
+}
+
+## Create Time Series using a "for" loop
+Nloop <- c(50, rep(0, 19))
+for(i in 2:length(t))
+{
+  Nloop[i] <- logistic(growth_rate = r, Carrying_Capacity = K, N = Nloop[i-1], fishing = 0)
+}
+
+plot(Nloop[1:19], Nloop[2:20])
+
+## Plot it
+par(mfrow = c(1,2)) #creates a layout where two graphs can be shown on one plot
+plot(t, Nt, type = 'l', ylim = c(0,1200), xlab = 'Time') #plots Nt over time
+plot(Nt[1:length(Nt)-1], Nt1, type = 'b', pch = 16, xlab = 'Nt', ylim = c(0,1200)) #plots Nt1 against Nt
+abline(a = 0, b = 1, col = 'red') #replacement line
+
+```
+### HADDON EXAMPLE BOX 2.4
+```{r} 
+## Set Place Holders
+t <- seq(0:100)
+r <- c(.1, 1, 2, 3) #Intrinsic Growth Rate. The inclusion of four different values for r is to mimic the figure from Haddon.
+K <- 1000 #Carrying Capacity
+
+## Create density-dependent logistic growth function
+logistic <- function(N, growth_rate, Carrying_Capacity, fishing) 
+{N + N*growth_rate*(1 -(N/Carrying_Capacity)) - fishing} # Logistic Function
+
+## Create the function to plot the time series 
+plot_logistic <- function(r){
+Nloop <- c(50, rep(0, 100)) #create vector where 50 is starting value, followed by 100 zeros
+for(i in 2:length(t)){Nloop[i] <- logistic(growth_rate = r, Carrying_Capacity = K, N = Nloop[i-1], fishing = 0)} #I refers to existing values, and this designates you want it to run from 2 to the length of t. Then you designate that Nloop[I] as the function "logistic" which we defined earlier, indicating what we want each variable to be.
+
+plot(t, Nloop, type = 'o', pch = 16, cex = .5, xlab = 'time', ylab = 'N', main = paste('r = ', r))
+}
+
+## Plot multiple plots for a vector of r values
+par(mfrow = c(2,2)); sapply(c(0.1, 1, 2.5, 3), plot_logistic)
+
+```
+### HADDON EXAMPLE BOX 2.5 - 2.6
+```{r}
+#############################
+
+## Parameters and constants
+ann_fish <- c(0.05, seq(0.1, 0.8, 0.1), 0.85) #annual fishing mortality
+instant_fish <- -log(1-ann_fish) #instantaneous fishing mortality
+ann_natm <- 0.1 #annual natural mortality
+total_S <- 1 - ann_fish - ann_natm #total annual mortality
+weights <- c(0.042, 0.082, 0.175, 0.283, 0.400, 0.523, 
+             0.700, 0.850, 0.925, 0.990, 1.000) # age-specific weights
+age <- 0:10 
+
+#Example Box 2.5: Yield Curve for tc = 1
+
+tc <- 1 
+
+## Set up matrix
+
+yield_vec <- rep(0, length(ann_fish)) 
+
+## YPR using a for loop
+  for(j in 1:length(ann_fish)){ #for every Annual Fishing Mortality Rate
+    N <- rep(0, length(age)); catchkg <- rep(0, length(age))
+    
+    for(k in 1:length(age)){ #for every age class
+      if(age[k] == min(age)) {N[k] <- 1000} #sets the initial population to N0
+      
+      if(age[k] < tc & age[k] > min(age)){ # For ages that are below the tc (cohort only affected by natural mortality)
+        N[k] <- N[k-1] * (1-ann_natm); catchkg[k] <- 0} 
+      
+      if(age[k] >= tc){# For ages at or above the tc (cohort affect by both natural and fishing mortality)
+        N[k] <- N[k-1] * (total_S[j]); catchkg[k] <- N[k-1] * ann_fish[j] * weights[k]} 
+    }
+      yield_vec[j] <- sum(catchkg)
+    }
+
+## Plot it (Figure 2.12)
+plot(instant_fish, yield_vec, type = 'o', ylab = 'Yield', ylim = c(0,250), cex = 1.5,
+        xlab = 'Instantaneous Fishing Mortality', pch = 18, lty = 1, xlim = c(0,2))
+segments(.69, 0, .69, 230); text(0.73, 235, '50%') 
+segments(1.61, 0, 1.61, 230); text(1.645, 235, '80%')
+
+
+```
+####Yield curves for tc values of 1, 3, and 5.
+```{r}
+tc <- c(1,3,5) #vector of ages at first capture
+
+## Set up matrix
+
+yield_mat <- matrix(0, ncol = length(tc), nrow = length(ann_fish), 
+                    dimnames = list(paste(ann_fish), paste(tc)))
+
+## YPR using a for loop
+for(i in 1:length(tc)){ #For every tc value
+   
+    for(j in 1:length(ann_fish)){ #for every Annual Fishing Mortality Rate
+        N <- rep(0, length(age)); catchkg <- rep(0, length(age))
+        
+        for(k in 1:length(age)){ #for every age class
+          if(age[k] == min(age)) {N[k] <- 1000} #sets the initial population to N0
+  
+          if(age[k] < tc[i] & age[k] > min(age)){# For ages that are below the tc (cohort only affected by natural mortality)
+          N[k] <- N[k-1] * (1-ann_natm); catchkg[k] <- 0} 
+    
+          if(age[k] >= tc[i]){# For ages at or above the tc (cohort affect by both natural and fishing mortality)
+          N[k] <- N[k-1] * (total_S[j]); catchkg[k] <- N[k-1] * ann_fish[j] * weights[k]} 
+          }
+    yield_mat[j,i] <- sum(catchkg)}
+}
+
+## Plot it (Figure 2.13)
+matplot(instant_fish, yield_mat, type = 'o', ylab = 'Yield', pch = c(5, 4, 16), lty = 1, 
+        xlab = 'Instantaneous Fishing Mortality', xlim = c(0,2), ylim = c(0,400))
+text(rep(1.9, 3), c(68, 200, 300), c('Age 1', 'Age 3', 'Age 5'))
+```

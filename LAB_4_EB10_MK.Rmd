@@ -1,0 +1,95 @@
+---
+title: "Haddon Example Box 10 - Stock-Recruitment Relationships"
+author: "Maia Kapur"
+date: "August 31, 2016"
+output: html_document
+---
+## MBIO 601 Lab 4.
+### HADDON EXAMPLE BOX 10.3
+```{r}
+## Define series of spawning stock steps
+spawn = c(1, 10, seq(from = 100, to = 500, by = 100), seq(from = 1000, to = 10000, by = 500))
+
+## Define 3-parameter S-R Equation
+#Zack's method of greatly shortening this step, as opposed to defining every model individually
+####################################
+deriso = Vectorize(function(alpha, beta, gamma){return(alpha*spawn*(1-beta*gamma*spawn)^(1/gamma))})
+
+## Deriso-Schnute, Ricker, and B-H SR curves
+SR_mat = deriso(alpha = c(10,10,10), beta = c(.0004,.0004,0.001), gamma = c(0.25,.00000001, -1))
+colnames(SR_mat) = c('Deriso-Schnute', 'Ricker', 'Beverton-Holt') 
+rownames(SR_mat) = paste(spawn)
+
+## Plot it
+matplot(x = spawn, y = SR_mat, type = 'l', xlab = 'Spawning Stock Size', ylab = 'Recruitment', las = 1, col = 'black', lty = 1, lwd = 2, xlim = c(0, 10000), ylim = c(0, 10000))
+text(c(4000, 7100, 7500), c(3000, 5000, 9400), c('Deriso-Schnute', 'Ricker', 'Beverton-Holt'))
+
+rm(list=ls())
+
+```
+### HADDON EXAMPLE BOX 10.4 - missing bbmle
+```{r, eval = FALSE}
+## Load 'bbmle' package for MLE
+library(bbmle)
+
+## Define Stock and Recruit data
+
+stock = c(2.4,3.2,3.9,5.7,6,7.4,8.2,10,10.1,10.4,11.3,12.8,18,24)
+recruit = c(11.6,7.1,14.3,19.1,12.4,19.7,37.5,18.5,22.1,26.9,19.2,21,9.9,26.8)
+
+##  Ricker equation can be log-transformed and fitted as a linear model.
+obs_logRS = log(recruit/stock) #observed log ratio of R to S
+Ricker_lm = lm(obs_logRS ~ stock) #Ricker R_S Model
+
+## Beverton Holt S-R Relationship - Similar to EB 9. he B-H equation has to be fitted using a non-linear method because the B-H equation does not have a linear form. Thus, this model has to be fit using any of the parameter optimization functions discussed (I used mle2 in the 'bbmle' library, but there are others)
+# The optimized parameters are then extracted from the mle2 object (i.e. mle2_object@coef), and then the fitted values can be obtained by manipulating Eq.10.10
+
+NLL <- function(a, b){
+  n = length(recruit)
+  expect = log(a) - log(b + stock)
+  sigma = sqrt(sum((expect - obs_logRS)^2)/n) #log-normal errors
+  NLL = (n/2) * (log(2*pi) + 2*log(sigma) + 1)
+  return(NLL)
+}
+
+BH_mle = mle2(minuslogl = NLL, start = list(a = 3, b = 4))
+model_BH = (BH_mle@coef[1]*stock)/(BH_mle@coef[2] + stock)
+
+## Plot It
+
+plot(stock, recruit, xlab = 'Stock (Spawning) Biomass', ylab = 'Recruitment', las = 1, pch = 4)
+lines(stock, exp(predict(Ricker_lm)) * stock, col = 'green', lty = 4, lwd = 2)
+lines(stock, model_BH, col = 'red', lty = 5)
+legend('topleft', c('B-H', 'Ricker'), col = c('red', 'green'), lty=c(5, 4))
+
+rm(list=ls())
+```
+
+### HADDON EXAMPLE BOX 10.6
+```{r}
+## Define Data
+spawn = c(2.4,3.2,3.9,5.7,6,7.4,8.2,10,10.1,10.4,11.3,12.8,18,24)
+recruit = c(11.6,7.1,14.3,19.1,12.4,19.7,37.5,18.5,22.1,26.9,19.2,21,9.9,26.8)
+jan = c(0,85,0,0,18,14,0,102,2,4,0,1,353,23)
+feb = c(0,28,54,1,19,41,213,22,1,10,0,5,19,38)
+obs_logRS = log(recruit/spawn)
+
+## Ricker R-S w/o environmental parameters
+
+Ricker_lm = lm(obs_logRS ~ spawn) #Ricker R_S Model
+model_R = exp(predict(Ricker_lm)) * spawn
+
+## Ricker R-S w/ environmental parameters for two months
+
+Ricker_lm_env = lm(obs_logRS ~ spawn + jan + feb)
+model_R_env = exp(predict(Ricker_lm_env)) * spawn
+
+##Plot It
+plot(spawn, recruit, xlab = 'Spawning Index (Year)', 
+     ylab = 'Recruitment Index (Year x + 1)', xlim = c(0,25), ylim = c(0,50), pch = 6)
+lines(spawn, model_R, lwd = 3); lines(spawn, model_R_env, lty = 2, lwd = 4)
+legend('topleft', c('Ricker', 'Ricker + Environment'), lty = c(1,2), lwd = 4, bty = 'n')
+
+rm(list=ls())
+
+```
